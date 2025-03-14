@@ -14,10 +14,13 @@
 
 ### Gameplay Screen - (Actual Game)
 
-- [ ] Key Events to move two players
-- [ ] Wall Collision logic for players
-- [ ] What to do if ball collide wall
-- [ ] What to do if ball collide player
+- [x] Draw two player
+- [x] Key Events to move two players
+- [x] Wall Collision logic for players
+- [x] Ball Draw
+- [x] Ball movement physics
+- [x] Ball Wall Collision
+- [x] Player ball collision
 
 ### Game over screen
 
