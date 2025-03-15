@@ -27,6 +27,14 @@ const (
 	GAMESTATE_EXIT
 )
 
+type GameWinner int
+
+const (
+	GAMEWINNER_NONE GameWinner = iota
+	GAMEWINNER_ONE
+	GAMEWINNER_TWO
+)
+
 const dim = 1280
 
 var LINE_COLOR = rl.Red
@@ -56,16 +64,17 @@ func main() {
 	ball := Ball{
 		pos: rl.Vector2{X: dim / 2, Y: dim / 2}, vel: rl.Vector2{X: 0, Y: 0},
 	}
-	gamestate := GAMESTATE_MENU
+	state := GAMESTATE_MENU
+	winner := GAMEWINNER_NONE
 
 	start_rec := rl.NewRectangle(dim/2-200, dim/2-60-50, 400, 100)
 	start_is_hover := false
 	exit_rec := rl.NewRectangle(dim/2-200, dim/2+60-50, 400, 100)
 	exit_is_hover := false
 
-	for !rl.WindowShouldClose() && gamestate != GAMESTATE_EXIT {
+	for !rl.WindowShouldClose() && state != GAMESTATE_EXIT {
 		// EVENTS BEGIN
-		if gamestate == GAMESTATE_GAMEPLAY {
+		if state == GAMESTATE_GAMEPLAY || state == GAMESTATE_GAMEOVER {
 			if rl.IsKeyDown(rl.KeyA) {
 				if p1.vel < 0 {
 					p1.vel = -p1.vel
@@ -91,8 +100,15 @@ func main() {
 				p2.vel -= 2 * frame_time()
 			}
 			if rl.IsKeyPressed(rl.KeyEnter) && !isStarted {
+
 				startSpeed := 10
 				isStarted = true
+				if state == GAMESTATE_GAMEOVER {
+					state = GAMESTATE_GAMEPLAY
+					winner = GAMEWINNER_NONE
+					p1.pp = 0
+					p2.pp = 0
+				}
 				randVect := rl.Vector2{
 					X: 100,
 					Y: float32(rl.GetRandomValue(-50, 50)),
@@ -104,20 +120,20 @@ func main() {
 				randVect = rl.Vector2Scale(rl.Vector2Normalize(randVect), float32(startSpeed))
 				ball.vel = randVect
 			}
-		} else if gamestate == GAMESTATE_MENU {
+		} else if state == GAMESTATE_MENU {
 			if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 				if start_is_hover {
 					// panic("MAA PHIRSE CHUD GYI")
-					gamestate = GAMESTATE_GAMEPLAY
+					state = GAMESTATE_GAMEPLAY
 				}
 				if exit_is_hover {
-					gamestate = GAMESTATE_EXIT
+					state = GAMESTATE_EXIT
 				}
 			}
 		}
 		// EVENTS END
 		// UPDATE BEGIN
-		if gamestate == GAMESTATE_GAMEPLAY {
+		if state == GAMESTATE_GAMEPLAY || state == GAMESTATE_GAMEOVER {
 			// p1
 			p1.pos.Y += p1.vel * frame_time()
 			if p1.pos.Y < 0 {
@@ -155,14 +171,20 @@ func main() {
 				ball.vel = rl.NewVector2(0, 0)
 				p2.pp++
 				p2.blink = 60
-				// panic("PLAYER 2 GAIN ONE POINT")
+				if p2.pp == 3 {
+					state = GAMESTATE_GAMEOVER
+					winner = GAMEWINNER_TWO
+				}
 			} else if ball.pos.X+ballSize > dim+ballSize*4 {
 				ball.pos = rl.Vector2{X: dim / 2, Y: dim / 2}
 				isStarted = false
 				ball.vel = rl.NewVector2(0, 0)
 				p1.pp++
-				p1.blink = 20
-				// panic("PLAYER 1 GAIN ONE POINT")
+				p1.blink = 60
+				if p1.pp == 3 {
+					state = GAMESTATE_GAMEOVER
+					winner = GAMEWINNER_ONE
+				}
 			}
 			if ball.pos.Y-ballSize < 0 {
 				ball.pos.Y = ballSize
@@ -218,7 +240,7 @@ func main() {
 				}
 			}
 			frameCount++
-		} else if gamestate == GAMESTATE_MENU {
+		} else if state == GAMESTATE_MENU {
 			start_is_hover = rl.CheckCollisionPointRec(rl.GetMousePosition(), start_rec)
 			exit_is_hover = rl.CheckCollisionPointRec(rl.GetMousePosition(), exit_rec)
 		}
@@ -226,7 +248,7 @@ func main() {
 
 		// DRAW BEGIN
 		rl.BeginDrawing()
-		if gamestate == GAMESTATE_GAMEPLAY {
+		if state == GAMESTATE_GAMEPLAY || state == GAMESTATE_GAMEOVER {
 
 			rl.ClearBackground(CLEAR_COLOR)
 			rl.DrawRectangle(0, 0, dim, dim, BG_COLOR)
@@ -246,14 +268,20 @@ func main() {
 			rl.DrawRectangleV(p2.pos, playerSize, PLAYER_COLOR)
 
 			if !isStarted {
-				if (frameCount/60)%2 == 0 {
-					DrawTextCenter("Press Enter to start!", dim/2, dim/2, 72, TEXT_COLOR)
-				}
-			} else {
 
+				DrawRectCenter(dim/2, dim/2, int(dim*0.9), 400, rl.Fade(rl.RayWhite, 0.7))
+				if state == GAMESTATE_GAMEPLAY && (frameCount/60)%2 == 0 {
+					DrawTextCenter("Press Enter to start!", dim/2, dim/2, 72, TEXT_COLOR)
+				} else if state == GAMESTATE_GAMEOVER {
+					DrawTextCenter(fmt.Sprint("Player ", winner, " won the match"), dim/2, dim/2-72, 72, TEXT_COLOR)
+					DrawTextCenter("Press Enter to restart!", dim/2, dim/2, 72, TEXT_COLOR)
+
+				}
+
+			} else {
 				rl.DrawCircleV(ball.pos, ballSize, PLAYER_COLOR)
 			}
-		} else if gamestate == GAMESTATE_MENU {
+		} else if state == GAMESTATE_MENU {
 			rl.ClearBackground(rl.Black)
 			rl.DrawRectangle(0, 0, dim, dim, BG_COLOR)
 

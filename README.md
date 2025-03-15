@@ -30,6 +30,6 @@
 
 ### Game over screen
 
-- [ ] Game over logic - best of 10
-- [ ] Announce winner on game over
-- [ ] Restart and Exit option
+- [x] Game over logic - best of 10
+- [x] Announce winner on game over
+- [x] Restart option
