@@ -4,9 +4,9 @@
 
 ### Title Screen - ( Play Game and Exit Game optios)
 
-- [ ] Menu boxes
-- [ ] Start Game Logic
-- [ ] Exit Game Logic
+- [x] Menu boxes
+- [x] Start Game Logic
+- [x] Exit Game Logic
 - [ ] Audio for clicking
 - [ ] Click effects
 - [ ] BGM audio
@@ -21,6 +21,12 @@
 - [x] Ball movement physics
 - [x] Ball Wall Collision
 - [x] Player ball collision
+
+### HUD
+
+- [x] Show Players Score
+- [x] Blink Start text on reset or start (Press Enter to Start)
+- [x] Blink Who got the point when one player misses ball
 
 ### Game over screen
 

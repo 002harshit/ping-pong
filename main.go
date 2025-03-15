@@ -7,15 +7,25 @@ import (
 )
 
 type Entity struct {
-	pos rl.Vector2
-	vel float32
-	pp  int
+	pos   rl.Vector2
+	vel   float32
+	pp    int
+	blink int
 }
 
 type Ball struct {
 	pos rl.Vector2
 	vel rl.Vector2
 }
+
+type GameState int
+
+const (
+	GAMESTATE_MENU GameState = iota
+	GAMESTATE_GAMEPLAY
+	GAMESTATE_GAMEOVER
+	GAMESTATE_EXIT
+)
 
 const dim = 1280
 
@@ -28,13 +38,14 @@ var CLEAR_COLOR = rl.RayWhite
 const MAX_VEL = 16
 
 func main() {
-	rl.InitWindow(dim, dim, "basic window")
+	rl.InitWindow(dim, dim, "ping pong")
 	defer rl.CloseWindow()
 	rl.SetTargetFPS(60)
 
 	playerSize := rl.Vector2{X: dim / 32, Y: dim / 6}
 	var ballSize float32 = dim / 32
 	isStarted := false
+	frameCount := 0
 
 	p1 := Entity{
 		pos: rl.Vector2{X: 0, Y: 0},
@@ -45,10 +56,16 @@ func main() {
 	ball := Ball{
 		pos: rl.Vector2{X: dim / 2, Y: dim / 2}, vel: rl.Vector2{X: 0, Y: 0},
 	}
+	gamestate := GAMESTATE_MENU
 
-	for !rl.WindowShouldClose() {
+	start_rec := rl.NewRectangle(dim/2-200, dim/2-60-50, 400, 100)
+	start_is_hover := false
+	exit_rec := rl.NewRectangle(dim/2-200, dim/2+60-50, 400, 100)
+	exit_is_hover := false
+
+	for !rl.WindowShouldClose() && gamestate != GAMESTATE_EXIT {
 		// EVENTS BEGIN
-		{
+		if gamestate == GAMESTATE_GAMEPLAY {
 			if rl.IsKeyDown(rl.KeyA) {
 				if p1.vel < 0 {
 					p1.vel = -p1.vel
@@ -87,11 +104,20 @@ func main() {
 				randVect = rl.Vector2Scale(rl.Vector2Normalize(randVect), float32(startSpeed))
 				ball.vel = randVect
 			}
-
+		} else if gamestate == GAMESTATE_MENU {
+			if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+				if start_is_hover {
+					// panic("MAA PHIRSE CHUD GYI")
+					gamestate = GAMESTATE_GAMEPLAY
+				}
+				if exit_is_hover {
+					gamestate = GAMESTATE_EXIT
+				}
+			}
 		}
 		// EVENTS END
 		// UPDATE BEGIN
-		{
+		if gamestate == GAMESTATE_GAMEPLAY {
 			// p1
 			p1.pos.Y += p1.vel * frame_time()
 			if p1.pos.Y < 0 {
@@ -128,12 +154,14 @@ func main() {
 				ball.pos = rl.Vector2{X: dim / 2, Y: dim / 2}
 				ball.vel = rl.NewVector2(0, 0)
 				p2.pp++
+				p2.blink = 60
 				// panic("PLAYER 2 GAIN ONE POINT")
 			} else if ball.pos.X+ballSize > dim+ballSize*4 {
 				ball.pos = rl.Vector2{X: dim / 2, Y: dim / 2}
 				isStarted = false
 				ball.vel = rl.NewVector2(0, 0)
 				p1.pp++
+				p1.blink = 20
 				// panic("PLAYER 1 GAIN ONE POINT")
 			}
 			if ball.pos.Y-ballSize < 0 {
@@ -155,10 +183,16 @@ func main() {
 					ball.vel.Y *= -1
 					ball.pos.Y = p1.pos.Y + playerSize.Y + ballSize + 0.5
 				}
-				if ball.pos.X-ballSize > p1.pos.X+playerSize.X/1.5 {
+				if ball.pos.X-ballSize > p1.pos.X {
 					ball.pos.X = p1.pos.X + playerSize.X + ballSize + 0.5
 					ball.vel.X *= -1
 					ball.vel.Y *= -1
+					// incrementing some ball velocity based on player vel
+					v := p1.vel * 0.1
+					if v < 0 {
+						v *= -1
+					}
+					ball.vel = rl.Vector2Add(ball.vel, rl.Vector2Scale(rl.Vector2Normalize(ball.vel), v))
 				}
 			}
 
@@ -172,27 +206,74 @@ func main() {
 					ball.vel.Y *= -1
 					ball.pos.Y = p2.pos.Y + playerSize.Y + ballSize + 0.5
 				}
-				if ball.pos.X-ballSize < p2.pos.X+playerSize.X-playerSize.X/1.5 {
+				if ball.pos.X-ballSize < p2.pos.X+playerSize.X {
 					ball.pos.X = p2.pos.X - ballSize - 0.5
 					ball.vel.X *= -1
+					// incrementing some ball velocity based on player vel
+					v := p1.vel * 0.1
+					if v < 0 {
+						v *= -1
+					}
+					ball.vel = rl.Vector2Add(ball.vel, rl.Vector2Scale(rl.Vector2Normalize(ball.vel), v))
 				}
 			}
+			frameCount++
+		} else if gamestate == GAMESTATE_MENU {
+			start_is_hover = rl.CheckCollisionPointRec(rl.GetMousePosition(), start_rec)
+			exit_is_hover = rl.CheckCollisionPointRec(rl.GetMousePosition(), exit_rec)
 		}
 		// UPDATE END
 
 		// DRAW BEGIN
 		rl.BeginDrawing()
-		{
+		if gamestate == GAMESTATE_GAMEPLAY {
 
 			rl.ClearBackground(CLEAR_COLOR)
 			rl.DrawRectangle(0, 0, dim, dim, BG_COLOR)
-			DrawRectCenter(dim/2, dim/2, 10, dim, LINE_COLOR)
-			// DrawTextCenter(message, dim/2, dim/2, font_size, TEXT_COLOR)
+
+			if p1.blink <= 0 || (frameCount/10)%2 == 0 {
+				DrawTextCenter(fmt.Sprint(p1.pp), dim/4, 64, 128, TEXT_COLOR)
+				p1.blink = max(p1.blink-1, 0)
+			}
+			if p2.blink <= 0 || (frameCount/10)%2 == 0 {
+				DrawTextCenter(fmt.Sprint(p2.pp), 3*dim/4, 64, 128, TEXT_COLOR)
+				p2.blink = max(p2.blink-1, 0)
+			}
+
+			DrawRectCenter(dim/2, dim/2, 5, dim, LINE_COLOR)
 
 			rl.DrawRectangleV(p1.pos, playerSize, PLAYER_COLOR)
 			rl.DrawRectangleV(p2.pos, playerSize, PLAYER_COLOR)
-			rl.DrawCircleV(ball.pos, ballSize, PLAYER_COLOR)
+
+			if !isStarted {
+				if (frameCount/60)%2 == 0 {
+					DrawTextCenter("Press Enter to start!", dim/2, dim/2, 72, TEXT_COLOR)
+				}
+			} else {
+
+				rl.DrawCircleV(ball.pos, ballSize, PLAYER_COLOR)
+			}
+		} else if gamestate == GAMESTATE_MENU {
+			rl.ClearBackground(rl.Black)
+			rl.DrawRectangle(0, 0, dim, dim, BG_COLOR)
+
+			if start_is_hover {
+				rl.DrawRectangleRec(start_rec, rl.DarkGray)
+				DrawTextCenter("Start", dim/2, dim/2-60, 72, rl.White)
+			} else {
+				rl.DrawRectangleRec(start_rec, rl.RayWhite)
+				DrawTextCenter("Start", dim/2, dim/2-60, 72, TEXT_COLOR)
+			}
+			if exit_is_hover {
+				rl.DrawRectangleRec(exit_rec, rl.DarkGray)
+				DrawTextCenter("Exit", dim/2, dim/2+60, 72, rl.White)
+			} else {
+				rl.DrawRectangleRec(exit_rec, rl.RayWhite)
+				DrawTextCenter("Exit", dim/2, dim/2+60, 72, TEXT_COLOR)
+			}
+
 		}
+		rl.DrawFPS(0, 0)
 		rl.EndDrawing()
 		// DRAW END
 	}

@@ -18,5 +18,5 @@ func isCollidingCircleRec(b Ball, radius float32, p Entity, size rl.Vector2) boo
 }
 func DrawTextCenter(message string, cx, cy, fontsize int, col color.RGBA) {
 	size := rl.MeasureTextEx(rl.GetFontDefault(), message, float32(fontsize), float32(fontsize/10))
-	rl.DrawText(message, int32(float32(cx)-size.X/2), int32(float32(cy)-size.Y/2), int32(fontsize), rl.Black)
+	rl.DrawText(message, int32(float32(cx)-size.X/2), int32(float32(cy)-size.Y/2), int32(fontsize), col)
 }
