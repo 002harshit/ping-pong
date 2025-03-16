@@ -35,59 +35,84 @@ const (
 	GAMEWINNER_TWO
 )
 
-var LINE_COLOR = rl.NewColor(40, 90, 70, 255)
-var BG_COLOR = rl.NewColor(31, 31, 31, 255)
-var TEXT_COLOR = rl.NewColor(216, 216, 216, 255)
-var PLAYER_COLOR = rl.NewColor(64, 172, 172, 255)
-var BALL_COLOR = rl.NewColor(240, 170, 200, 255)
-var CLEAR_COLOR = rl.NewColor(216, 216, 216, 255)
-
 func main() {
-	rl.InitWindow(0, 0, "ping pong")
+	rl.InitWindow(128, 128, "ping pong")
 	defer rl.CloseWindow()
-	var k = rl.GetScreenWidth()
-	if k > rl.GetScreenHeight() {
-		k = rl.GetScreenHeight()
-	}
-	k = int(float32(k) * 0.8)
-	dim_i := int(k)
-	dim := float32(k)
-	rl.SetWindowSize(dim_i, dim_i)
+
+	rl.InitAudioDevice()
+	defer rl.CloseAudioDevice()
+
+	MX := rl.GetMonitorWidth(rl.GetCurrentMonitor())
+	MY := rl.GetMonitorHeight(rl.GetCurrentMonitor())
+	k := int(min(0.8*float64(MX), 0.8*float64(MY)))
+	rl.SetWindowSize(k, k)
+	rl.SetWindowPosition(MX/2-k/2, MY/2-k/2)
 	rl.SetTargetFPS(60)
 
-	MAX_VEL := dim / 72
-	BALL_START_SPEED := dim / 128
-	MENU_FONT_SIZE := dim / 18
-	MSG_FONT_SIZE := dim / 24
-	SCORE_FONT_SIZE := dim / 12
-	PLAYER_INC_SPEED := float32(2.0)
-	P_SIZE := rl.Vector2{X: dim / 20, Y: dim / 6.0}
-	P_GRITH := dim / 108
-	B_SIZE := dim / 56
-	START_TIMER := 36
-	BLINK_TIMER := 10
-	WIN_COUNT := 1
-	EPSILON := float32(0.5)
+	// DIMENTIONS
+	DIM_I := rl.GetScreenWidth()
+	DIM := float32(DIM_I)
+
+	// GAME VALS
+	maxVel := DIM / 72
+	ballStartSpeed := DIM / 128
+	menuFontSize := DIM / 18
+	msgFontSize := DIM / 24
+	scoreFontSize := DIM / 12
+	pIncSpeed := float32(2.0)
+	pSize := rl.Vector2{X: DIM / 20, Y: DIM / 6.0}
+	pGrith := DIM / 108
+	bSize := DIM / 56
+	startBtn := rl.NewRectangle(DIM/2-menuFontSize*2, DIM/2-menuFontSize-menuFontSize-10, menuFontSize*4, menuFontSize*2)
+	exitBtn := rl.NewRectangle(DIM/2-menuFontSize*2, DIM/2-menuFontSize+menuFontSize+10, menuFontSize*4, menuFontSize*2)
+
+	// CONST
+	const START_TIMER = 36
+	const BLINK_TIMER = 10
+	const WIN_COUNT = 5
+	const EPSILON = 0.5
+
+	// COLORS
+	lineCol := rl.NewColor(40, 90, 70, 255)
+	bgCol := rl.NewColor(31, 31, 31, 255)
+	textCol := rl.NewColor(216, 216, 216, 255)
+	playerCol := rl.NewColor(64, 172, 172, 255)
+	ballCol := rl.NewColor(240, 170, 200, 255)
+	clearCol := rl.NewColor(216, 216, 216, 255)
+
+	// MUSIC AND SFX
+	clickSound := rl.LoadSound("./resources/click.mp3")
+	hitSound := rl.LoadSound("./resources/hit.mp3")
+	menuSound := rl.LoadSound("./resources/menu.mp3")
+	bgmSounds := []rl.Sound{
+		rl.LoadSound("./resources/bgm1.mp3"),
+		rl.LoadSound("./resources/bgm2.mp3"),
+		rl.LoadSound("./resources/bgm3.mp3"),
+	}
+	current_bgm := 1
+
+	rl.SetSoundVolume(clickSound, 0.3)
+	rl.SetSoundVolume(hitSound, 0.2)
+	rl.SetSoundVolume(menuSound, 0.3)
 
 	p1 := Entity{
-		pos: rl.Vector2{X: -P_SIZE.X + P_GRITH, Y: 0}, vel: 0, pp: 0, blink: 0,
+		pos: rl.Vector2{X: -pSize.X + pGrith, Y: 0}, vel: 0, pp: 0, blink: 0,
 	}
 	p2 := Entity{
-		pos: rl.Vector2{X: dim - P_GRITH, Y: 0}, vel: 0, pp: 0, blink: 0,
+		pos: rl.Vector2{X: DIM - pGrith, Y: 0}, vel: 0, pp: 0, blink: 0,
 	}
 	ball := Ball{
-		pos: rl.Vector2{X: dim / 2, Y: dim / 2}, vel: rl.Vector2{X: 0, Y: 0},
+		pos: rl.Vector2{X: DIM / 2, Y: DIM / 2}, vel: rl.Vector2{X: 0, Y: 0},
 	}
 	state := GAMESTATE_MENU
 	winner := GAMEWINNER_NONE
 
-	start_rec := rl.NewRectangle(dim/2-MENU_FONT_SIZE*2, dim/2-MENU_FONT_SIZE-MENU_FONT_SIZE-10, MENU_FONT_SIZE*4, MENU_FONT_SIZE*2)
-	start_is_hover := false
-	exit_rec := rl.NewRectangle(dim/2-MENU_FONT_SIZE*2, dim/2-MENU_FONT_SIZE+MENU_FONT_SIZE+10, MENU_FONT_SIZE*4, MENU_FONT_SIZE*2)
-	exit_is_hover := false
+	start_btn_hover := false
+	exit_btn_hover := false
 
-	isStarted := false
-	frameCount := 0
+	started := false
+	frame_count := 0
+
 	for !rl.WindowShouldClose() && state != GAMESTATE_EXIT {
 
 		// EVENTS BEGIN
@@ -96,29 +121,29 @@ func main() {
 				if p1.vel < 0 {
 					p1.vel = -p1.vel
 				}
-				p1.vel += PLAYER_INC_SPEED * frame_time()
+				p1.vel += pIncSpeed * frame_time()
 			}
 			if rl.IsKeyDown(rl.KeyD) {
 				if p1.vel > 0 {
 					p1.vel = -p1.vel
 				}
-				p1.vel -= PLAYER_INC_SPEED * frame_time()
+				p1.vel -= pIncSpeed * frame_time()
 			}
 			if rl.IsKeyDown(rl.KeyLeft) {
 				if p2.vel < 0 {
 					p2.vel = -p2.vel
 				}
-				p2.vel += PLAYER_INC_SPEED * frame_time()
+				p2.vel += pIncSpeed * frame_time()
 			}
 			if rl.IsKeyDown(rl.KeyRight) {
 				if p2.vel > 0 {
 					p2.vel = -p2.vel
 				}
-				p2.vel -= PLAYER_INC_SPEED * frame_time()
+				p2.vel -= pIncSpeed * frame_time()
 			}
-			if rl.IsKeyPressed(rl.KeyEnter) && !isStarted {
-
-				isStarted = true
+			if rl.IsKeyPressed(rl.KeyEnter) && !started {
+				rl.PlaySound(clickSound)
+				started = true
 				if state == GAMESTATE_GAMEOVER {
 					state = GAMESTATE_GAMEPLAY
 					winner = GAMEWINNER_NONE
@@ -133,21 +158,24 @@ func main() {
 					randVect.X *= -1
 				}
 
-				randVect = rl.Vector2Scale(rl.Vector2Normalize(randVect), BALL_START_SPEED)
+				randVect = rl.Vector2Scale(rl.Vector2Normalize(randVect), ballStartSpeed)
 				ball.vel = randVect
 			}
 		} else if state == GAMESTATE_MENU {
 			if rl.IsKeyPressed(rl.KeyEnter) {
+				rl.PlaySound(clickSound)
 				state = GAMESTATE_GAMEPLAY
 			}
+
 			if rl.IsKeyPressed(rl.KeyQ) {
 				state = GAMESTATE_EXIT
 			}
 			if rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
-				if start_is_hover {
+				rl.PlaySound(clickSound)
+				if start_btn_hover {
 					state = GAMESTATE_GAMEPLAY
 				}
-				if exit_is_hover {
+				if exit_btn_hover {
 					state = GAMESTATE_EXIT
 				}
 			}
@@ -156,40 +184,53 @@ func main() {
 		// UPDATE BEGIN
 		if state == GAMESTATE_GAMEPLAY || state == GAMESTATE_GAMEOVER {
 			rl.HideCursor()
+			prev_bgm := current_bgm - 1
+			if prev_bgm < 0 {
+				prev_bgm = len(bgmSounds) - 1
+			}
+			if !rl.IsSoundPlaying(bgmSounds[prev_bgm]) {
+				rl.StopSound(menuSound)
+				for _, bgm := range bgmSounds {
+					rl.StopSound(bgm)
+				}
+				rl.SetSoundVolume(bgmSounds[current_bgm], 0.2)
+				rl.PlaySound(bgmSounds[current_bgm])
+				current_bgm = (current_bgm + 1) % len(bgmSounds)
+			}
 			// p1
 			p1.pos.Y += p1.vel * frame_time()
 			if p1.pos.Y < 0 {
 				p1.pos.Y = 0
-			} else if p1.pos.Y+P_SIZE.Y > dim {
-				p1.pos.Y = dim - P_SIZE.Y
+			} else if p1.pos.Y+pSize.Y > DIM {
+				p1.pos.Y = DIM - pSize.Y
 			}
 			p1.vel *= 0.9
-			if p1.vel < -MAX_VEL {
-				p1.vel = -MAX_VEL
-			} else if p1.vel > MAX_VEL {
-				p1.vel = MAX_VEL
+			if p1.vel < -maxVel {
+				p1.vel = -maxVel
+			} else if p1.vel > maxVel {
+				p1.vel = maxVel
 			}
 
 			// p2
 			p2.pos.Y += p2.vel * frame_time()
 			if p2.pos.Y < 0 {
 				p2.pos.Y = 0
-			} else if p2.pos.Y+P_SIZE.Y > dim {
-				p2.pos.Y = dim - P_SIZE.Y
+			} else if p2.pos.Y+pSize.Y > DIM {
+				p2.pos.Y = DIM - pSize.Y
 			}
 			p2.vel *= 0.9
-			if p2.vel < -MAX_VEL {
-				p2.vel = -MAX_VEL
-			} else if p2.vel > MAX_VEL {
-				p2.vel = MAX_VEL
+			if p2.vel < -maxVel {
+				p2.vel = -maxVel
+			} else if p2.vel > maxVel {
+				p2.vel = maxVel
 			}
 
 			// ball
 			ball.pos.X += ball.vel.X * frame_time()
 			ball.pos.Y += ball.vel.Y * frame_time()
-			if ball.pos.X-B_SIZE < -B_SIZE*4 {
-				isStarted = false
-				ball.pos = rl.Vector2{X: dim / 2, Y: dim / 2}
+			if ball.pos.X-bSize < -bSize*4 {
+				started = false
+				ball.pos = rl.Vector2{X: DIM / 2, Y: DIM / 2}
 				ball.vel = rl.NewVector2(0, 0)
 				p2.pp++
 				p2.blink = BLINK_TIMER * 5
@@ -197,9 +238,9 @@ func main() {
 					state = GAMESTATE_GAMEOVER
 					winner = GAMEWINNER_TWO
 				}
-			} else if ball.pos.X+B_SIZE > dim+B_SIZE*4 {
-				ball.pos = rl.Vector2{X: dim / 2, Y: dim / 2}
-				isStarted = false
+			} else if ball.pos.X+bSize > DIM+bSize*4 {
+				ball.pos = rl.Vector2{X: DIM / 2, Y: DIM / 2}
+				started = false
 				ball.vel = rl.NewVector2(0, 0)
 				p1.pp++
 				p1.blink = BLINK_TIMER * 5
@@ -208,27 +249,30 @@ func main() {
 					winner = GAMEWINNER_ONE
 				}
 			}
-			if ball.pos.Y-B_SIZE < 0 {
-				ball.pos.Y = B_SIZE
+			if ball.pos.Y-bSize < 0 {
+				rl.PlaySound(hitSound)
+				ball.pos.Y = bSize
 				ball.vel.Y = -ball.vel.Y
-			} else if ball.pos.Y+B_SIZE > dim {
-				ball.pos.Y = dim - B_SIZE
+			} else if ball.pos.Y+bSize > DIM {
+				rl.PlaySound(hitSound)
+				ball.pos.Y = DIM - bSize
 				ball.vel.Y = -ball.vel.Y
 			}
 			// BALL x PLAYER 1 COLLISION
-			if isCollidingCircleRec(ball, B_SIZE, p1, P_SIZE) {
+			if isCollidingCircleRec(ball, bSize, p1, pSize) {
+				rl.PlaySound(hitSound)
 				// if   ball.pos.X - ballSize < p1.pos.X + playerSize
-				if rl.CheckCollisionCircleLine(ball.pos, B_SIZE, p1.pos, rl.NewVector2(p1.pos.X+P_SIZE.X, p1.pos.Y)) && ball.vel.Y > 0 {
+				if rl.CheckCollisionCircleLine(ball.pos, bSize, p1.pos, rl.NewVector2(p1.pos.X+pSize.X, p1.pos.Y)) && ball.vel.Y > 0 {
 					ball.vel.Y *= -1
-					ball.pos.Y = p1.pos.Y - B_SIZE - EPSILON
+					ball.pos.Y = p1.pos.Y - bSize - EPSILON
 
 				}
-				if rl.CheckCollisionCircleLine(ball.pos, B_SIZE, rl.NewVector2(p1.pos.X, p1.pos.Y+P_SIZE.Y), rl.Vector2Add(p1.pos, P_SIZE)) && ball.vel.Y < 0 {
+				if rl.CheckCollisionCircleLine(ball.pos, bSize, rl.NewVector2(p1.pos.X, p1.pos.Y+pSize.Y), rl.Vector2Add(p1.pos, pSize)) && ball.vel.Y < 0 {
 					ball.vel.Y *= -1
-					ball.pos.Y = p1.pos.Y + P_SIZE.Y + B_SIZE + EPSILON
+					ball.pos.Y = p1.pos.Y + pSize.Y + bSize + EPSILON
 				}
-				if ball.pos.X-B_SIZE > p1.pos.X {
-					ball.pos.X = p1.pos.X + P_SIZE.X + B_SIZE + EPSILON
+				if ball.pos.X-bSize > p1.pos.X {
+					ball.pos.X = p1.pos.X + pSize.X + bSize + EPSILON
 					ball.vel.X *= -1
 					ball.vel.Y *= -1
 					// incrementing some ball velocity based on player vel
@@ -241,17 +285,18 @@ func main() {
 			}
 
 			// BALL x PLAYER 2 COLLISION
-			if isCollidingCircleRec(ball, B_SIZE, p2, P_SIZE) {
-				if rl.CheckCollisionCircleLine(ball.pos, B_SIZE, p2.pos, rl.NewVector2(p2.pos.X+P_SIZE.X, p2.pos.Y)) && ball.vel.Y > 0 {
+			if isCollidingCircleRec(ball, bSize, p2, pSize) {
+				rl.PlaySound(hitSound)
+				if rl.CheckCollisionCircleLine(ball.pos, bSize, p2.pos, rl.NewVector2(p2.pos.X+pSize.X, p2.pos.Y)) && ball.vel.Y > 0 {
 					ball.vel.Y *= -1
-					ball.pos.Y = p2.pos.Y - B_SIZE - EPSILON
+					ball.pos.Y = p2.pos.Y - bSize - EPSILON
 				}
-				if rl.CheckCollisionCircleLine(ball.pos, B_SIZE, rl.NewVector2(p2.pos.X, p2.pos.Y+P_SIZE.Y), rl.Vector2Add(p2.pos, P_SIZE)) && ball.vel.Y < 0 {
+				if rl.CheckCollisionCircleLine(ball.pos, bSize, rl.NewVector2(p2.pos.X, p2.pos.Y+pSize.Y), rl.Vector2Add(p2.pos, pSize)) && ball.vel.Y < 0 {
 					ball.vel.Y *= -1
-					ball.pos.Y = p2.pos.Y + P_SIZE.Y + B_SIZE + EPSILON
+					ball.pos.Y = p2.pos.Y + pSize.Y + bSize + EPSILON
 				}
-				if ball.pos.X-B_SIZE < p2.pos.X+P_SIZE.X {
-					ball.pos.X = p2.pos.X - B_SIZE - EPSILON
+				if ball.pos.X-bSize < p2.pos.X+pSize.X {
+					ball.pos.X = p2.pos.X - bSize - EPSILON
 					ball.vel.X *= -1
 					// incrementing some ball velocity based on player vel
 					v := p1.vel * 0.1
@@ -261,11 +306,14 @@ func main() {
 					ball.vel = rl.Vector2Add(ball.vel, rl.Vector2Scale(rl.Vector2Normalize(ball.vel), v))
 				}
 			}
-			frameCount++
+			frame_count++
 		} else if state == GAMESTATE_MENU {
+			if !rl.IsSoundPlaying(menuSound) {
+				rl.PlaySound(menuSound)
+			}
 			rl.ShowCursor()
-			start_is_hover = rl.CheckCollisionPointRec(rl.GetMousePosition(), start_rec)
-			exit_is_hover = rl.CheckCollisionPointRec(rl.GetMousePosition(), exit_rec)
+			start_btn_hover = rl.CheckCollisionPointRec(rl.GetMousePosition(), startBtn)
+			exit_btn_hover = rl.CheckCollisionPointRec(rl.GetMousePosition(), exitBtn)
 		}
 		// UPDATE END
 
@@ -273,53 +321,52 @@ func main() {
 		rl.BeginDrawing()
 		if state == GAMESTATE_GAMEPLAY || state == GAMESTATE_GAMEOVER {
 
-			rl.ClearBackground(CLEAR_COLOR)
-			rl.DrawRectangle(0, 0, int32(dim_i), int32(dim_i), BG_COLOR)
+			rl.ClearBackground(clearCol)
+			rl.DrawRectangle(0, 0, int32(DIM_I), int32(DIM_I), bgCol)
 
-			if p1.blink <= 0 || (frameCount/BLINK_TIMER)%2 == 0 {
-				DrawTextCenter(fmt.Sprint(p1.pp), dim_i/4, int(SCORE_FONT_SIZE)*2, int(SCORE_FONT_SIZE), TEXT_COLOR)
+			if p1.blink <= 0 || (frame_count/BLINK_TIMER)%2 == 0 {
+				DrawTextCenter(fmt.Sprint(p1.pp), DIM_I/4, int(scoreFontSize)*2, int(scoreFontSize), textCol)
 				p1.blink = max(p1.blink-1, 0)
 			}
-			if p2.blink <= 0 || (frameCount/BLINK_TIMER)%2 == 0 {
-				DrawTextCenter(fmt.Sprint(p2.pp), 3*dim_i/4, int(SCORE_FONT_SIZE)*2, int(SCORE_FONT_SIZE), TEXT_COLOR)
+			if p2.blink <= 0 || (frame_count/BLINK_TIMER)%2 == 0 {
+				DrawTextCenter(fmt.Sprint(p2.pp), 3*DIM_I/4, int(scoreFontSize)*2, int(scoreFontSize), textCol)
 				p2.blink = max(p2.blink-1, 0)
 			}
 
-			rl.DrawRectangleV(p1.pos, P_SIZE, PLAYER_COLOR)
-			rl.DrawRectangleV(p2.pos, P_SIZE, PLAYER_COLOR)
+			rl.DrawRectangleV(p1.pos, pSize, playerCol)
+			rl.DrawRectangleV(p2.pos, pSize, playerCol)
 
-			if !isStarted {
-				if state == GAMESTATE_GAMEPLAY && (frameCount/START_TIMER)%2 == 0 {
-					DrawRectCenter(dim_i/2, dim_i/2, int(MSG_FONT_SIZE*23*0.9), int(MSG_FONT_SIZE*3), rl.Fade(rl.DarkGray, 0.3))
-					DrawTextCenter("Press Enter to start!", dim_i/2, dim_i/2, int(MSG_FONT_SIZE), TEXT_COLOR)
+			if !started {
+				if state == GAMESTATE_GAMEPLAY && (frame_count/START_TIMER)%2 == 0 {
+					DrawRectCenter(DIM_I/2, DIM_I/2, int(msgFontSize*23*0.9), int(msgFontSize*3), rl.Fade(rl.DarkGray, 0.3))
+					DrawTextCenter("Press Enter to start!", DIM_I/2, DIM_I/2, int(msgFontSize), textCol)
 				} else if state == GAMESTATE_GAMEOVER {
-					DrawRectCenter(dim_i/2, dim_i/2, int(MSG_FONT_SIZE*23*0.9), int(MSG_FONT_SIZE*6), rl.Fade(rl.DarkGray, 0.3))
-					DrawTextCenter(fmt.Sprint("Player ", winner, " won the match"), dim_i/2, dim_i/2-int(MSG_FONT_SIZE)-10, int(MSG_FONT_SIZE), TEXT_COLOR)
-					DrawTextCenter("Press Enter to restart!", dim_i/2, dim_i/2+int(MSG_FONT_SIZE)+10, int(MSG_FONT_SIZE), TEXT_COLOR)
+					DrawRectCenter(DIM_I/2, DIM_I/2, int(msgFontSize*23*0.9), int(msgFontSize*6), rl.Fade(rl.DarkGray, 0.3))
+					DrawTextCenter(fmt.Sprint("Player ", winner, " won the match"), DIM_I/2, DIM_I/2-int(msgFontSize)-10, int(msgFontSize), textCol)
+					DrawTextCenter("Press Enter to restart!", DIM_I/2, DIM_I/2+int(msgFontSize)+10, int(msgFontSize), textCol)
 				}
 			} else {
-				DrawRectCenter(dim_i/2, dim_i/2, 10, dim_i, LINE_COLOR)
-				rl.DrawCircleV(ball.pos, B_SIZE, BALL_COLOR)
+				DrawRectCenter(DIM_I/2, DIM_I/2, 10, DIM_I, lineCol)
+				rl.DrawCircleV(ball.pos, bSize, ballCol)
 			}
 		} else if state == GAMESTATE_MENU {
 			rl.ClearBackground(rl.Black)
-			rl.DrawRectangle(0, 0, int32(dim_i), int32(dim_i), BG_COLOR)
+			rl.DrawRectangle(0, 0, int32(DIM_I), int32(DIM_I), bgCol)
 
-			if start_is_hover {
-				rl.DrawRectangleRec(start_rec, rl.DarkGray)
-				DrawTextCenter("Start", dim_i/2, dim_i/2-int(MENU_FONT_SIZE)-10, int(MENU_FONT_SIZE), rl.White)
+			if start_btn_hover {
+				rl.DrawRectangleRec(startBtn, rl.DarkGray)
+				DrawTextCenter("Start", DIM_I/2, DIM_I/2-int(menuFontSize)-10, int(menuFontSize), rl.White)
 			} else {
-				rl.DrawRectangleRec(start_rec, rl.RayWhite)
-				DrawTextCenter("Start", dim_i/2, dim_i/2-int(MENU_FONT_SIZE)-10, int(MENU_FONT_SIZE), rl.Black)
+				rl.DrawRectangleRec(startBtn, rl.RayWhite)
+				DrawTextCenter("Start", DIM_I/2, DIM_I/2-int(menuFontSize)-10, int(menuFontSize), rl.Black)
 			}
-			if exit_is_hover {
-				rl.DrawRectangleRec(exit_rec, rl.DarkGray)
-				DrawTextCenter("Exit", dim_i/2, dim_i/2+int(MENU_FONT_SIZE)+10, int(MENU_FONT_SIZE), rl.White)
+			if exit_btn_hover {
+				rl.DrawRectangleRec(exitBtn, rl.DarkGray)
+				DrawTextCenter("Exit", DIM_I/2, DIM_I/2+int(menuFontSize)+10, int(menuFontSize), rl.White)
 			} else {
-				rl.DrawRectangleRec(exit_rec, rl.RayWhite)
-				DrawTextCenter("Exit", dim_i/2, dim_i/2+int(MENU_FONT_SIZE)+10, int(MENU_FONT_SIZE), rl.Black)
+				rl.DrawRectangleRec(exitBtn, rl.RayWhite)
+				DrawTextCenter("Exit", DIM_I/2, DIM_I/2+int(menuFontSize)+10, int(menuFontSize), rl.Black)
 			}
-
 		}
 		rl.DrawFPS(0, 0)
 		rl.EndDrawing()

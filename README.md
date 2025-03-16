@@ -7,10 +7,9 @@
 - [x] Menu boxes
 - [x] Start Game Logic
 - [x] Exit Game Logic
-- [ ] Audio for clicking
-- [ ] Click effects
-- [ ] BGM audio
-- [ ] Cursor sprites
+- [x] Audio for clicking
+- [x] Click effects
+- [x] BGM audio
 
 ### Gameplay Screen - (Actual Game)
 
