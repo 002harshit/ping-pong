@@ -1,4 +1,4 @@
-module github.com/Developer-Harshit/ping-pong
+module github.com/002harshit/ping-pong
 
 go 1.23.6
 
